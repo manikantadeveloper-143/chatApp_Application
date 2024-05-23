@@ -1,17 +1,22 @@
+
 const express = require("express");
 const dotenv = require("dotenv");
 const { default: mongoose } = require("mongoose");
-const app = express();
+const http = require("http");
+const { Server } = require("socket.io");
 const cors = require("cors");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
-app.use(
-  cors({
-    origin: "*",
-  })
-);
 dotenv.config();
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
 
+app.use(cors());
 app.use(express.json());
 
 const userRoutes = require("./Routes/userRoutes");
@@ -40,5 +45,32 @@ app.use("/message", messageRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
+// Socket.io logic
+io.on("connection", (socket) => {
+  console.log("New client connected", socket.id);
+
+  // Handle custom events here
+  socket.on("joinRoom", (room) => {
+    socket.join(room);
+    console.log(`Client ${socket.id} joined room ${room}`);
+  });
+
+  socket.on("leaveRoom", (room) => {
+    socket.leave(room);
+    console.log(`Client ${socket.id} left room ${room}`);
+  });
+
+  socket.on("sendMessage", (data) => {
+    const { room, message } = data;
+    io.to(room).emit("receiveMessage", message);
+    console.log(`Message sent to room ${room}: ${message}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected", socket.id);
+  });
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, console.log("Server is Running..."));
+server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+
